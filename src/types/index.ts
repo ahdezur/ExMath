@@ -1,4 +1,23 @@
-export type Role = 'admin' | 'presenter';
+export type Role = 'admin' | 'presenter' | 'student';
+
+export type University = 'uchile' | 'uandes' | 'udd';
+
+export interface StudentUser {
+  id: string;
+  email: string;
+  name: string;
+  university: University;
+  verified: boolean;
+  createdAt: string;
+}
+
+export interface OTPState {
+  email: string;
+  code: string;
+  expiresAt: number; // timestamp in ms
+  university: University;
+  name: string;
+}
 
 export type QuestionType = 
   | 'true_false' 
@@ -41,12 +60,11 @@ export interface CheckboxesQuestion extends BaseQuestion {
 
 export interface FillBlanksQuestion extends BaseQuestion {
   type: 'fill_blanks';
-  // Example text: "Un espacio vector V sobre un cuerpo K es un conjunto {0} equipado con {1} operaciones."
   templateText: string; 
   blanks: {
     index: number;
-    options: string[]; // List of options for this dropdown
-    correctValue: string; // The correct string value
+    options: string[]; 
+    correctValue: string; 
   }[];
 }
 
@@ -56,9 +74,9 @@ export interface DevelopmentQuestion extends BaseQuestion {
   solutionPauta: {
     steps: {
       title: string;
-      content: string; // LaTeX formatted step explanation
+      content: string; 
     }[];
-    finalAnswer: string; // LaTeX formatted final answer
+    finalAnswer: string; 
   };
 }
 
@@ -83,9 +101,9 @@ export interface Slide {
   subtitle?: string;
   content: string; // Markdown / LaTeX content
   layout: SlideLayout;
-  questionId?: string; // Optional embedded question from bank
+  questionId?: string; 
   codeExample?: string;
-  notes?: string; // Presenter private speaker notes
+  notes?: string; 
 }
 
 export interface Course {
@@ -95,6 +113,7 @@ export interface Course {
   description: string;
   color: string; // Accent color hex or tailwind class
   slides: Slide[];
+  targetUniversity?: University | 'all'; // Target university tag
 }
 
 export interface UserResponseState {

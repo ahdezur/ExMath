@@ -1,17 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Role, Course, Question, UserResponseState } from './types';
+import { Role, Course, Question, UserResponseState, StudentUser } from './types';
 import { INITIAL_COURSES, INITIAL_QUESTIONS } from './data/initialData';
 import { Header } from './components/common/Header';
 import { PresentationView } from './components/presentation/PresentationView';
 import { AdminDashboard } from './components/admin/AdminDashboard';
+import { StudentAuthModal } from './components/auth/StudentAuthModal';
 
 const STORAGE_KEY_COURSES = 'exmath_courses_v2';
 const STORAGE_KEY_QUESTIONS = 'exmath_questions_v2';
 const STORAGE_KEY_RESPONSES = 'exmath_user_responses_v2';
+const STORAGE_KEY_STUDENTS = 'exmath_students_v2';
+const STORAGE_KEY_CURRENT_STUDENT = 'exmath_current_student_v2';
 
 export const App: React.FC = () => {
   const [role, setRole] = useState<Role>('presenter');
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   useEffect(() => {
     const handleFsChange = () => {
@@ -41,6 +45,26 @@ export const App: React.FC = () => {
     }
   });
 
+  // Load registered students list
+  const [students, setStudents] = useState<StudentUser[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_STUDENTS);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Load logged in student
+  const [studentUser, setStudentUser] = useState<StudentUser | null>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_CURRENT_STUDENT);
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
   const [activeCourseId, setActiveCourseId] = useState<string>(
     'course-algebra-201'
   );
@@ -67,6 +91,18 @@ export const App: React.FC = () => {
     localStorage.setItem(STORAGE_KEY_RESPONSES, JSON.stringify(userResponses));
   }, [userResponses]);
 
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(students));
+  }, [students]);
+
+  useEffect(() => {
+    if (studentUser) {
+      localStorage.setItem(STORAGE_KEY_CURRENT_STUDENT, JSON.stringify(studentUser));
+    } else {
+      localStorage.removeItem(STORAGE_KEY_CURRENT_STUDENT);
+    }
+  }, [studentUser]);
+
   const activeCourse = courses.find((c) => c.id === activeCourseId) || courses[0];
 
   const handleResponseChange = (questionId: string, stateUpdate: any) => {
@@ -89,6 +125,32 @@ export const App: React.FC = () => {
     setActiveCourseId(INITIAL_COURSES[0].id);
   };
 
+  const handleLoginStudentSuccess = (newStudent: StudentUser) => {
+    setStudentUser(newStudent);
+    // Add to students array if not already present
+    setStudents((prev) => {
+      const exists = prev.some((s) => s.email.toLowerCase() === newStudent.email.toLowerCase());
+      if (exists) {
+        return prev.map((s) => (s.email.toLowerCase() === newStudent.email.toLowerCase() ? newStudent : s));
+      }
+      return [...prev, newStudent];
+    });
+    setIsAuthModalOpen(false);
+  };
+
+  const handleLogoutStudent = () => {
+    setStudentUser(null);
+  };
+
+  const handleDeleteStudent = (id: string) => {
+    if (confirm('¿Desea eliminar a este estudiante del registro?')) {
+      setStudents((prev) => prev.filter((s) => s.id !== id));
+      if (studentUser?.id === id) {
+        setStudentUser(null);
+      }
+    }
+  };
+
   return (
     <div className={`h-screen flex flex-col overflow-hidden font-sans ${
       role === 'admin' ? 'bg-slate-100 text-slate-900' : 'bg-slate-950 text-slate-100'
@@ -101,7 +163,9 @@ export const App: React.FC = () => {
           courses={courses}
           activeCourseId={activeCourseId}
           onSelectCourse={setActiveCourseId}
-          onResetDemo={handleResetDemo}
+          studentUser={studentUser}
+          onOpenAuthModal={() => setIsAuthModalOpen(true)}
+          onLogoutStudent={handleLogoutStudent}
         />
       )}
 
@@ -124,11 +188,21 @@ export const App: React.FC = () => {
               onUpdateCourses={setCourses}
               onUpdateQuestions={setQuestions}
               onResetData={handleResetDemo}
+              students={students}
+              onDeleteStudent={handleDeleteStudent}
             />
           </div>
         )}
       </main>
+
+      {/* Modal de Autenticación de Estudiantes con OTP de 5 Minutos */}
+      <StudentAuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onLoginSuccess={handleLoginStudentSuccess}
+      />
     </div>
   );
 };
 export default App;
+

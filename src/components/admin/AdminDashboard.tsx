@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Course, Slide, Question, SlideLayout } from '../../types';
+import { Course, Slide, Question, SlideLayout, StudentUser, University } from '../../types';
 import { QuestionEditor } from './QuestionEditor';
 import { MathText } from '../../utils/katexRenderer';
 import { 
@@ -18,7 +18,11 @@ import {
   Sparkles,
   FileQuestion,
   CheckCircle2,
-  Eye
+  Eye,
+  Users,
+  School,
+  ShieldCheck,
+  Tag
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -29,6 +33,8 @@ interface AdminDashboardProps {
   onUpdateCourses: (courses: Course[]) => void;
   onUpdateQuestions: (questions: Question[]) => void;
   onResetData: () => void;
+  students: StudentUser[];
+  onDeleteStudent: (id: string) => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -39,15 +45,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onUpdateCourses,
   onUpdateQuestions,
   onResetData,
+  students,
+  onDeleteStudent,
 }) => {
-  const [activeTab, setActiveTab] = useState<'courses' | 'slides' | 'questions' | 'data'>('slides');
+  const [activeTab, setActiveTab] = useState<'courses' | 'slides' | 'questions' | 'students' | 'data'>('slides');
   const [editingSlide, setEditingSlide] = useState<Slide | null>(null);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [isCreatingQuestion, setIsCreatingQuestion] = useState(false);
   const [questionFilterType, setQuestionFilterType] = useState<string>('all');
+  const [studentUniFilter, setStudentUniFilter] = useState<string>('all');
 
   const activeCourse = courses.find((c) => c.id === activeCourseId) || courses[0];
   const courseQuestions = questions.filter((q) => q.courseId === activeCourse?.id);
+
+  const getUniLabel = (uni: University) => {
+    switch (uni) {
+      case 'uchile': return 'U. de Chile (@ug.uchile.cl)';
+      case 'uandes': return 'U. de los Andes (@miuandes.cl)';
+      case 'udd': return 'U. del Desarrollo (@udd.cl)';
+    }
+  };
 
   // --- GESTIÓN DE CURSOS ---
   const handleAddCourse = () => {
@@ -57,6 +74,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       name: 'Nuevo Curso Matemático',
       description: 'Descripción del nuevo curso...',
       color: 'from-purple-600 to-pink-500',
+      targetUniversity: 'all',
       slides: [
         {
           id: `slide-${Date.now()}-1`,
@@ -84,6 +102,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         onSelectCourse(filtered[0].id);
       }
     }
+  };
+
+  const handleUpdateCourseUniversity = (courseId: string, targetUniversity: University | 'all') => {
+    const updated = courses.map((c) => (c.id === courseId ? { ...c, targetUniversity } : c));
+    onUpdateCourses(updated);
   };
 
   // --- GESTIÓN DE SLIDES ---
@@ -159,7 +182,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // --- IMPORTAR Y EXPORTAR ---
   const handleExportJSON = () => {
-    const data = { courses, questions };
+    const data = { courses, questions, students };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -219,10 +242,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       </div>
 
       {/* PESTAÑAS NAVEGACIÓN */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-2 overflow-x-auto">
         <button
           onClick={() => setActiveTab('slides')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all ${
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all shrink-0 ${
             activeTab === 'slides'
               ? 'bg-cyan-600 text-white shadow-md'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
@@ -233,7 +256,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         <button
           onClick={() => setActiveTab('questions')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all ${
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all shrink-0 ${
             activeTab === 'questions'
               ? 'bg-cyan-600 text-white shadow-md'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
@@ -244,7 +267,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         <button
           onClick={() => setActiveTab('courses')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all ${
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all shrink-0 ${
             activeTab === 'courses'
               ? 'bg-cyan-600 text-white shadow-md'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
@@ -254,8 +277,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </button>
 
         <button
+          onClick={() => setActiveTab('students')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all shrink-0 ${
+            activeTab === 'students'
+              ? 'bg-cyan-600 text-white shadow-md'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+          }`}
+        >
+          <Users size={18} /> Estudiantes Registrados ({students.length})
+        </button>
+
+        <button
           onClick={() => setActiveTab('data')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all ${
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all shrink-0 ${
             activeTab === 'data'
               ? 'bg-cyan-600 text-white shadow-md'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
@@ -487,7 +521,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
 
                     <div className="p-6 rounded-2xl bg-slate-100 border border-slate-300 space-y-4">
-                      {/* Sub-tarjeta simulada de la slide */}
                       <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-lg space-y-4 text-slate-900">
                         <div className="border-b border-slate-200 pb-4">
                           <span className="text-[10px] font-bold uppercase tracking-widest text-cyan-700 block mb-1">
@@ -503,12 +536,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           )}
                         </div>
 
-                        {/* Content render */}
                         <div className="text-slate-800 text-base">
                           <MathText content={editingSlide.content || 'Sin contenido'} lightTheme={true} />
                         </div>
 
-                        {/* Question preview indicator */}
                         {editingSlide.questionId && (
                           <div className="mt-4 p-4 rounded-xl bg-cyan-50 border border-cyan-300 text-cyan-950 text-xs flex items-center justify-between">
                             <span className="flex items-center gap-2 font-semibold">
@@ -559,7 +590,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </button>
           </div>
 
-          {/* Filtros de Tipo */}
           <div className="flex flex-wrap items-center gap-2">
             {['all', 'true_false', 'multiple_choice', 'checkboxes', 'fill_blanks', 'development'].map(
               (t) => (
@@ -578,7 +608,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             )}
           </div>
 
-          {/* Modal / Form de Edición de Pregunta */}
           {(isCreatingQuestion || editingQuestion) && (
             <div className="bg-white border-2 border-cyan-400 rounded-3xl p-6 shadow-2xl animate-fadeIn">
               <h3 className="text-lg font-bold text-slate-900 mb-4">
@@ -596,7 +625,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           )}
 
-          {/* Lista de Preguntas */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {courseQuestions
               .filter((q) => questionFilterType === 'all' || q.type === questionFilterType)
@@ -645,12 +673,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       )}
 
-      {/* CONTENIDO PESTAÑA 3: GESTIÓN DE CURSOS */}
+      {/* CONTENIDO PESTAÑA 3: GESTIÓN DE CURSOS & ETIQUETAS DE UNIVERSIDAD */}
       {activeTab === 'courses' && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-              <BookOpen className="text-cyan-700" /> Todos los Cursos Disponibles
+              <BookOpen className="text-cyan-700" /> Todos los Cursos y Accesos por Universidad
             </h2>
             <button
               onClick={handleAddCourse}
@@ -701,6 +729,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <p className="text-sm text-slate-600 mt-1">{c.description}</p>
                 </div>
 
+                {/* ETIQUETA DE ACCESO DE UNIVERSIDAD */}
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+                  <label className="text-xs font-bold uppercase text-slate-600 flex items-center gap-1.5">
+                    <Tag size={14} className="text-cyan-700" /> Restricción de Universidad para Alumnos:
+                  </label>
+                  <select
+                    value={c.targetUniversity || 'all'}
+                    onChange={(e) => handleUpdateCourseUniversity(c.id, e.target.value as University | 'all')}
+                    className="w-full bg-white border border-slate-300 text-slate-900 text-xs font-bold py-2 px-3 rounded-lg outline-none cursor-pointer focus:border-cyan-600"
+                  >
+                    <option value="all">🌐 Todos los Estudiantes (Público General)</option>
+                    <option value="uchile">🎓 Exclusivo U. de Chile (@ug.uchile.cl)</option>
+                    <option value="uandes">🎓 Exclusivo U. de los Andes (@miuandes.cl)</option>
+                    <option value="udd">🎓 Exclusivo U. del Desarrollo (@udd.cl)</option>
+                  </select>
+                </div>
+
                 <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-200">
                   <span>{c.slides.length} Diapositivas</span>
                   <span>
@@ -713,7 +758,107 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       )}
 
-      {/* CONTENIDO PESTAÑA 4: DATOS & COPIA DE SEGURIDAD */}
+      {/* CONTENIDO PESTAÑA 4: ESTUDIANTES REGISTRADOS */}
+      {activeTab === 'students' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <Users className="text-cyan-700" /> Estudiantes Registrados ({students.length})
+              </h2>
+              <p className="text-xs text-slate-600">
+                Alumnos autenticados mediante código OTP de 5 minutos enviado a su correo institucional.
+              </p>
+            </div>
+
+            {/* Filter by university */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-slate-600">Filtrar Universidad:</span>
+              <select
+                value={studentUniFilter}
+                onChange={(e) => setStudentUniFilter(e.target.value)}
+                className="bg-white border border-slate-300 text-xs font-bold px-3 py-2 rounded-xl text-slate-800 outline-none"
+              >
+                <option value="all">Todas ({students.length})</option>
+                <option value="uchile">U. de Chile ({students.filter(s => s.university === 'uchile').length})</option>
+                <option value="uandes">U. de los Andes ({students.filter(s => s.university === 'uandes').length})</option>
+                <option value="udd">U. del Desarrollo ({students.filter(s => s.university === 'udd').length})</option>
+              </select>
+            </div>
+          </div>
+
+          {students.length === 0 ? (
+            <div className="p-12 rounded-3xl bg-white border border-slate-200 text-center text-slate-500 space-y-3">
+              <School size={40} className="mx-auto text-slate-400" />
+              <h3 className="font-bold text-slate-800 text-lg">No hay estudiantes registrados aún</h3>
+              <p className="text-xs max-w-sm mx-auto">
+                Los alumnos deben ingresar desde el botón "Ingreso Estudiantes" en la barra superior con su correo @ug.uchile.cl, @miuandes.cl o @udd.cl.
+              </p>
+            </div>
+          ) : (
+            <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase font-bold">
+                      <th className="p-4">Estudiante</th>
+                      <th className="p-4">Correo Institucional</th>
+                      <th className="p-4">Universidad</th>
+                      <th className="p-4">Estado OTP</th>
+                      <th className="p-4">Fecha Registro</th>
+                      <th className="p-4 text-right">Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 text-slate-800">
+                    {students
+                      .filter(s => studentUniFilter === 'all' || s.university === studentUniFilter)
+                      .map((s) => (
+                        <tr key={s.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-4 font-bold text-slate-900">{s.name}</td>
+                          <td className="p-4 font-mono text-xs text-slate-700">{s.email}</td>
+                          <td className="p-4">
+                            <span className="px-2.5 py-1 rounded-full text-xs font-extrabold uppercase bg-cyan-100 text-cyan-900 border border-cyan-200">
+                              {getUniLabel(s.university)}
+                            </span>
+                          </td>
+                          <td className="p-4">
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                              <ShieldCheck size={14} /> Verificado (OTP 5 min)
+                            </span>
+                          </td>
+                          <td className="p-4 text-xs text-slate-500">
+                            {new Date(s.createdAt).toLocaleDateString('es-CL', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </td>
+                          <td className="p-4 text-right">
+                            <button
+                              onClick={() => {
+                                if (confirm(`¿Eliminar al estudiante ${s.name}?`)) {
+                                  onDeleteStudent(s.id);
+                                }
+                              }}
+                              className="p-1.5 rounded hover:bg-rose-50 text-rose-600"
+                              title="Eliminar sesión"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* CONTENIDO PESTAÑA 5: DATOS & COPIA DE SEGURIDAD */}
       {activeTab === 'data' && (
         <div className="space-y-6 max-w-2xl mx-auto">
           <div className="bg-white border border-slate-200 rounded-3xl p-8 space-y-6 shadow-xl text-center text-slate-900">
@@ -721,7 +866,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div>
               <h2 className="text-2xl font-bold text-slate-900">Respaldo y Gestión de Datos</h2>
               <p className="text-sm text-slate-600 mt-1">
-                Exporta toda la información de cursos y preguntas o restaura los datos de demostración precargados.
+                Exporta toda la información de cursos, preguntas y estudiantes o restaura los datos de demostración precargados.
               </p>
             </div>
 
