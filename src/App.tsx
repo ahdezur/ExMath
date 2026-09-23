@@ -90,7 +90,9 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-slate-950 text-slate-100 overflow-hidden font-sans">
+    <div className={`h-screen flex flex-col overflow-hidden font-sans ${
+      role === 'admin' ? 'bg-slate-100 text-slate-900' : 'bg-slate-950 text-slate-100'
+    }`}>
       {/* Header General - Oculto en Pantalla Completa */}
       {!isFullscreen && (
         <Header
@@ -113,7 +115,7 @@ export const App: React.FC = () => {
             onResponseChange={handleResponseChange}
           />
         ) : (
-          <div className="h-full overflow-y-auto">
+          <div className="h-full overflow-y-auto bg-slate-100">
             <AdminDashboard
               courses={courses}
               questions={questions}
