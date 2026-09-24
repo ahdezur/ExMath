@@ -7,7 +7,7 @@ export const INITIAL_COURSES: Course[] = [
     name: 'Introducción al Álgebra y Geometría',
     description: 'Técnicas avanzadas de factorización de polinomios, raíces racionales, raíces complejas conjugadas y resolución sistemática de certámenes.',
     color: 'from-emerald-600 to-teal-500',
-    targetUniversity: 'all',
+    targetUniversity: 'uchile',
     slides: [
       {
         id: 'slide-alg-1',

@@ -8,11 +8,11 @@ import { StudentAuthModal } from './components/auth/StudentAuthModal';
 import { AdminAuthModal } from './components/auth/AdminAuthModal';
 import { LandingPage } from './components/home/LandingPage';
 
-const STORAGE_KEY_COURSES = 'exmath_courses_v5';
-const STORAGE_KEY_QUESTIONS = 'exmath_questions_v5';
-const STORAGE_KEY_RESPONSES = 'exmath_user_responses_v5';
-const STORAGE_KEY_STUDENTS = 'exmath_students_v2';
-const STORAGE_KEY_CURRENT_STUDENT = 'exmath_current_student_v2';
+const STORAGE_KEY_COURSES = 'exmath_courses_v6';
+const STORAGE_KEY_QUESTIONS = 'exmath_questions_v6';
+const STORAGE_KEY_RESPONSES = 'exmath_user_responses_v6';
+const STORAGE_KEY_STUDENTS = 'exmath_students_v3';
+const STORAGE_KEY_CURRENT_STUDENT = 'exmath_current_student_v3';
 const STORAGE_KEY_ADMIN_PASSWORD = 'exmath_admin_password_v1';
 const SESSION_KEY_ADMIN_AUTH = 'exmath_admin_session_v1';
 
@@ -138,7 +138,27 @@ export const App: React.FC = () => {
     }
   }, [studentUser]);
 
-  const activeCourse = courses.find((c) => c.id === activeCourseId) || courses[0];
+  // Compute courses visible to current user (student or admin/presenter)
+  const visibleCourses = courses.filter((c) => {
+    if (role === 'admin') return true;
+    if (!studentUser) return true;
+    if (!c.targetUniversity || c.targetUniversity === 'all') return true;
+    return c.targetUniversity === studentUser.university;
+  });
+
+  // Determine active course restricted strictly to visible courses
+  const activeCourse =
+    visibleCourses.find((c) => c.id === activeCourseId) ||
+    (studentUser ? visibleCourses.find((c) => c.targetUniversity === studentUser.university) : undefined) ||
+    visibleCourses[0] ||
+    courses[0];
+
+  // Auto-sync activeCourseId with activeCourse.id
+  useEffect(() => {
+    if (activeCourse && activeCourse.id !== activeCourseId) {
+      setActiveCourseId(activeCourse.id);
+    }
+  }, [activeCourse, activeCourseId]);
 
   const handleResponseChange = (questionId: string, stateUpdate: any) => {
     setUserResponses((prev) => ({
@@ -170,6 +190,14 @@ export const App: React.FC = () => {
       }
       return [...prev, newStudent];
     });
+
+    // Auto-switch active course to student's university course if found
+    const targetCourse = courses.find((c) => c.targetUniversity === newStudent.university) ||
+                         courses.find((c) => !c.targetUniversity || c.targetUniversity === 'all');
+    if (targetCourse) {
+      setActiveCourseId(targetCourse.id);
+    }
+
     setIsAuthModalOpen(false);
   };
 
