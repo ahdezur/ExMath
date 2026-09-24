@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Course, Slide, Question, UserResponseState, Role } from '../../types';
 import { MathText } from '../../utils/katexRenderer';
 import { QuestionRenderer } from '../questions/QuestionRenderer';
@@ -41,6 +41,10 @@ export const PresentationView: React.FC<PresentationViewProps> = ({
   const [showNotes, setShowNotes] = useState(false);
   const [lightTheme, setLightTheme] = useState(true);
 
+  // Fullscreen hover / auto-hide control state
+  const [showControls, setShowControls] = useState(true);
+  const hideControlsTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const slides = course.slides;
   const currentSlide: Slide | undefined = slides[currentSlideIdx];
   const embeddedQuestion = currentSlide?.questionId 
@@ -67,13 +71,54 @@ export const PresentationView: React.FC<PresentationViewProps> = ({
     }
   };
 
+  const handleMouseMove = useCallback(() => {
+    setShowControls(true);
+    if (hideControlsTimerRef.current) {
+      clearTimeout(hideControlsTimerRef.current);
+    }
+    if (document.fullscreenElement) {
+      hideControlsTimerRef.current = setTimeout(() => {
+        setShowControls(false);
+      }, 2500);
+    }
+  }, []);
+
+  const handleControlMouseEnter = () => {
+    setShowControls(true);
+    if (hideControlsTimerRef.current) {
+      clearTimeout(hideControlsTimerRef.current);
+    }
+  };
+
+  const handleControlMouseLeave = () => {
+    if (document.fullscreenElement) {
+      hideControlsTimerRef.current = setTimeout(() => {
+        setShowControls(false);
+      }, 1500);
+    }
+  };
+
   useEffect(() => {
     const handleFsChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+      const isFS = !!document.fullscreenElement;
+      setIsFullscreen(isFS);
+      if (!isFS) {
+        setShowControls(true);
+        if (hideControlsTimerRef.current) {
+          clearTimeout(hideControlsTimerRef.current);
+        }
+      } else {
+        handleMouseMove();
+      }
     };
     document.addEventListener('fullscreenchange', handleFsChange);
-    return () => document.removeEventListener('fullscreenchange', handleFsChange);
-  }, []);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFsChange);
+      if (hideControlsTimerRef.current) {
+        clearTimeout(hideControlsTimerRef.current);
+      }
+    };
+  }, [handleMouseMove]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -118,13 +163,26 @@ export const PresentationView: React.FC<PresentationViewProps> = ({
   const progressPercent = ((currentSlideIdx + 1) / slides.length) * 100;
 
   return (
-    <div className={`relative h-full flex flex-col justify-between overflow-hidden transition-colors duration-300 ${
-      lightTheme ? 'bg-slate-100 text-slate-900' : 'bg-slate-950 text-slate-100'
-    }`}>
+    <div
+      onMouseMove={handleMouseMove}
+      className={`relative h-full flex flex-col justify-between overflow-hidden transition-colors duration-300 ${
+        lightTheme ? 'bg-slate-100 text-slate-900' : 'bg-slate-950 text-slate-100'
+      }`}
+    >
       {/* BARRA SUPERIOR DE CONTROL PPT */}
-      <div className={`px-6 py-3 border-b flex items-center justify-between shrink-0 z-10 transition-colors ${
-        lightTheme ? 'bg-white/90 border-slate-200 text-slate-800' : 'bg-slate-900/90 border-slate-800 text-slate-200'
-      } backdrop-blur-md`}>
+      <div
+        onMouseEnter={handleControlMouseEnter}
+        onMouseLeave={handleControlMouseLeave}
+        className={`px-6 py-3 border-b flex items-center justify-between shrink-0 transition-all duration-300 backdrop-blur-md ${
+          lightTheme ? 'bg-white/95 border-slate-200 text-slate-800' : 'bg-slate-900/95 border-slate-800 text-slate-200'
+        } ${
+          isFullscreen
+            ? `fixed top-0 left-0 right-0 z-50 shadow-xl ${
+                showControls ? 'translate-y-0 opacity-100 pointer-events-auto' : '-translate-y-full opacity-0 pointer-events-none'
+              }`
+            : 'relative z-10 translate-y-0 opacity-100'
+        }`}
+      >
         <div className="flex items-center gap-3">
           <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-gradient-to-r ${course.color} text-white shadow-sm`}>
             {course.code}
@@ -186,15 +244,17 @@ export const PresentationView: React.FC<PresentationViewProps> = ({
         </div>
       </div>
 
-      {/* ÁREA PRINCIPAL DE LA DIAPOSITIVA (PPT STAGE) */}
-      <div className="flex-1 overflow-y-auto p-6 md:p-12 flex flex-col justify-center items-center relative">
-        <div className={`w-full max-w-6xl rounded-3xl border p-8 md:p-12 shadow-2xl transition-all duration-300 ${
+      {/* ÁREA PRINCIPAL DE LA DIAPOSITIVA (PPT STAGE FIJO SIN SCROLL DE PÁGINA) */}
+      <div className="flex-1 overflow-hidden p-3 sm:p-6 md:p-8 flex flex-col justify-center items-center relative min-h-0 w-full">
+        <div className={`w-full max-w-6xl h-full ${
+          isFullscreen ? 'max-h-[94vh]' : 'max-h-[calc(100vh-140px)]'
+        } rounded-3xl border p-6 md:p-10 shadow-2xl flex flex-col justify-between overflow-hidden transition-all duration-300 relative ${
           lightTheme 
             ? 'bg-white border-slate-200 shadow-slate-300/50' 
             : 'bg-slate-900/90 border-slate-800/90 shadow-cyan-950/20'
         }`}>
           {/* Header de la Diapositiva */}
-          <div className="mb-8 border-b border-slate-700/30 pb-6">
+          <div className="mb-4 md:mb-6 border-b border-slate-700/30 pb-4 shrink-0">
             <div className="flex items-center justify-between mb-2">
               <span className={`text-xs font-bold uppercase tracking-widest flex items-center gap-1.5 ${
                 lightTheme ? 'text-cyan-700' : 'text-cyan-400'
@@ -211,13 +271,13 @@ export const PresentationView: React.FC<PresentationViewProps> = ({
                 </span>
               )}
             </div>
-            <h2 className={`text-3xl md:text-5xl font-extrabold tracking-tight ${
+            <h2 className={`text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight ${
               lightTheme ? 'text-slate-900' : 'text-white'
             }`}>
               {currentSlide.title}
             </h2>
             {currentSlide.subtitle && (
-              <p className={`mt-2 text-lg md:text-xl font-semibold ${
+              <p className={`mt-1 text-base md:text-lg font-semibold ${
                 lightTheme ? 'text-cyan-700' : 'text-cyan-400'
               }`}>
                 {currentSlide.subtitle}
@@ -226,97 +286,105 @@ export const PresentationView: React.FC<PresentationViewProps> = ({
           </div>
 
           {/* CONTENIDO SEGÚN LAYOUT */}
-          {currentSlide.layout === 'title' && (
-            <div className="py-8 text-center space-y-6 max-w-3xl mx-auto">
-              <div className={`text-xl md:text-2xl leading-relaxed ${lightTheme ? 'text-slate-800' : 'text-slate-100'}`}>
-                <MathText content={currentSlide.content} lightTheme={lightTheme} />
-              </div>
-            </div>
-          )}
-
-          {currentSlide.layout === 'theorem' && (
-            <div className="space-y-6">
-              <div className={`p-6 rounded-2xl border ${
-                lightTheme 
-                  ? 'bg-cyan-50/90 border-cyan-200 text-slate-800 shadow-sm' 
-                  : 'bg-cyan-950/30 border-cyan-500/40 text-cyan-100'
-              }`}>
-                <MathText content={currentSlide.content} lightTheme={lightTheme} />
-              </div>
-              {embeddedQuestion && (
-                <div className="mt-6">
-                  <QuestionRenderer
-                    question={embeddedQuestion}
-                    userState={userResponses[embeddedQuestion.id]}
-                    onStateChange={(update) => onResponseChange(embeddedQuestion.id, update)}
-                    lightTheme={lightTheme}
-                  />
+          <div className="flex-1 min-h-0 flex flex-col justify-center overflow-y-auto pr-1">
+            {currentSlide.layout === 'title' && (
+              <div className="py-6 text-center space-y-6 max-w-3xl mx-auto">
+                <div className={`text-xl md:text-2xl leading-relaxed ${lightTheme ? 'text-slate-800' : 'text-slate-100'}`}>
+                  <MathText content={currentSlide.content} lightTheme={lightTheme} />
                 </div>
-              )}
-            </div>
-          )}
-
-          {currentSlide.layout === 'split_question' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-              <div className={`space-y-4 text-lg ${lightTheme ? 'text-slate-800' : 'text-slate-100'}`}>
-                <MathText content={currentSlide.content} lightTheme={lightTheme} />
               </div>
-              <div>
-                {embeddedQuestion ? (
-                  <QuestionRenderer
-                    question={embeddedQuestion}
-                    userState={userResponses[embeddedQuestion.id]}
-                    onStateChange={(update) => onResponseChange(embeddedQuestion.id, update)}
-                    lightTheme={lightTheme}
-                  />
-                ) : (
-                  <div className={`p-8 rounded-2xl border border-dashed text-center ${
-                    lightTheme ? 'border-slate-300 text-slate-500 bg-slate-50' : 'border-slate-700 text-slate-500 bg-slate-900/40'
-                  }`}>
-                    Sin pregunta vinculada a esta diapositiva.
+            )}
+
+            {currentSlide.layout === 'theorem' && (
+              <div className="space-y-6">
+                <div className={`p-6 rounded-2xl border ${
+                  lightTheme 
+                    ? 'bg-cyan-50/90 border-cyan-200 text-slate-800 shadow-sm' 
+                    : 'bg-cyan-950/30 border-cyan-500/40 text-cyan-100'
+                }`}>
+                  <MathText content={currentSlide.content} lightTheme={lightTheme} />
+                </div>
+                {embeddedQuestion && (
+                  <div className="mt-6">
+                    <QuestionRenderer
+                      question={embeddedQuestion}
+                      userState={userResponses[embeddedQuestion.id]}
+                      onStateChange={(update) => onResponseChange(embeddedQuestion.id, update)}
+                      lightTheme={lightTheme}
+                    />
                   </div>
                 )}
               </div>
-            </div>
-          )}
+            )}
 
-          {currentSlide.layout === 'full_exercise' && (
-            <div className="space-y-6">
-              <div className={`text-lg ${lightTheme ? 'text-slate-800' : 'text-slate-100'}`}>
-                <MathText content={currentSlide.content} lightTheme={lightTheme} />
+            {currentSlide.layout === 'split_question' && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+                <div className={`space-y-4 text-lg ${lightTheme ? 'text-slate-800' : 'text-slate-100'}`}>
+                  <MathText content={currentSlide.content} lightTheme={lightTheme} />
+                </div>
+                <div>
+                  {embeddedQuestion ? (
+                    <QuestionRenderer
+                      question={embeddedQuestion}
+                      userState={userResponses[embeddedQuestion.id]}
+                      onStateChange={(update) => onResponseChange(embeddedQuestion.id, update)}
+                      lightTheme={lightTheme}
+                    />
+                  ) : (
+                    <div className={`p-8 rounded-2xl border border-dashed text-center ${
+                      lightTheme ? 'border-slate-300 text-slate-500 bg-slate-50' : 'border-slate-700 text-slate-500 bg-slate-900/40'
+                    }`}>
+                      Sin pregunta vinculada a esta diapositiva.
+                    </div>
+                  )}
+                </div>
               </div>
-              {embeddedQuestion && (
-                <QuestionRenderer
-                  question={embeddedQuestion}
-                  userState={userResponses[embeddedQuestion.id]}
-                  onStateChange={(update) => onResponseChange(embeddedQuestion.id, update)}
-                  lightTheme={lightTheme}
-                />
-              )}
-            </div>
-          )}
+            )}
 
-          {currentSlide.layout === 'content' && (
-            <div className={`space-y-6 text-lg ${lightTheme ? 'text-slate-800' : 'text-slate-100'}`}>
-              <MathText content={currentSlide.content} lightTheme={lightTheme} />
-              {embeddedQuestion && (
-                <div className="mt-8">
+            {currentSlide.layout === 'full_exercise' && (
+              <div className="space-y-6">
+                <div className={`text-lg ${lightTheme ? 'text-slate-800' : 'text-slate-100'}`}>
+                  <MathText content={currentSlide.content} lightTheme={lightTheme} />
+                </div>
+                {embeddedQuestion && (
                   <QuestionRenderer
                     question={embeddedQuestion}
                     userState={userResponses[embeddedQuestion.id]}
                     onStateChange={(update) => onResponseChange(embeddedQuestion.id, update)}
                     lightTheme={lightTheme}
                   />
-                </div>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            )}
+
+            {currentSlide.layout === 'content' && (
+              <div className={`space-y-6 text-lg ${lightTheme ? 'text-slate-800' : 'text-slate-100'}`}>
+                <MathText content={currentSlide.content} lightTheme={lightTheme} />
+                {embeddedQuestion && (
+                  <div className="mt-8">
+                    <QuestionRenderer
+                      question={embeddedQuestion}
+                      userState={userResponses[embeddedQuestion.id]}
+                      onStateChange={(update) => onResponseChange(embeddedQuestion.id, update)}
+                      lightTheme={lightTheme}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* SPEAKER NOTES DRAWER (NOTAS PRIVADAS DEL ORADOR) */}
       {!isStudent && role !== 'student' && showNotes && currentSlide.notes && (
-        <div className="px-6 py-4 bg-slate-900 border-t border-cyan-500/40 text-cyan-100 flex items-start gap-3 text-sm z-20 backdrop-blur-md shadow-2xl">
+        <div className={`px-6 py-4 bg-slate-900 border-t border-cyan-500/40 text-cyan-100 flex items-start gap-3 text-sm backdrop-blur-md shadow-2xl transition-all duration-300 ${
+          isFullscreen
+            ? `fixed bottom-16 left-0 right-0 z-40 ${
+                showControls ? 'translate-y-0 opacity-100 pointer-events-auto' : 'translate-y-full opacity-0 pointer-events-none'
+              }`
+            : 'relative z-20'
+        }`}>
           <MessageSquare className="text-cyan-400 shrink-0 mt-0.5" size={18} />
           <div>
             <span className="font-bold text-cyan-300 block mb-0.5">💬 Notas Privadas del Orador (Solo visibles para el Docente):</span>
@@ -326,9 +394,19 @@ export const PresentationView: React.FC<PresentationViewProps> = ({
       )}
 
       {/* BARRA INFERIOR DE NAVEGACIÓN PPT */}
-      <div className={`px-6 py-3 border-t flex items-center justify-between shrink-0 z-10 ${
-        lightTheme ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-800'
-      }`}>
+      <div
+        onMouseEnter={handleControlMouseEnter}
+        onMouseLeave={handleControlMouseLeave}
+        className={`px-6 py-3 border-t flex items-center justify-between shrink-0 transition-all duration-300 backdrop-blur-md ${
+          lightTheme ? 'bg-white/95 border-slate-200' : 'bg-slate-900/95 border-slate-800'
+        } ${
+          isFullscreen
+            ? `fixed bottom-0 left-0 right-0 z-50 shadow-xl ${
+                showControls ? 'translate-y-0 opacity-100 pointer-events-auto' : 'translate-y-full opacity-0 pointer-events-none'
+              }`
+            : 'relative z-10 translate-y-0 opacity-100'
+        }`}
+      >
         {/* Previous Button */}
         <button
           onClick={goToPrev}
