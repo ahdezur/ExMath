@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Course, Slide, Question, SlideLayout, StudentUser, University } from '../../types';
 import { QuestionEditor } from './QuestionEditor';
 import { MathText } from '../../utils/katexRenderer';
+import { QuestionRenderer } from '../questions/QuestionRenderer';
 import { 
   BookOpen, 
   Layers, 
@@ -705,53 +706,117 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
-              {/* COLUMNA DERECHA (50% ANCHO): VISTA PREVIA EN VIVO (STICKY & ESPACIOSA) */}
+              {/* COLUMNA DERECHA (50% ANCHO): VISTA PREVIA EN VIVO (1:1 CON LA VISTA DEL ESTUDIANTE) */}
               <div className="space-y-3 sticky top-6">
                 <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                   <h4 className="text-xs font-bold text-cyan-900 uppercase tracking-wider flex items-center gap-1.5">
-                    <Sparkles size={16} className="text-cyan-600 animate-pulse" /> Vista Previa en Vivo (Paralela 50/50)
+                    <Sparkles size={16} className="text-cyan-600 animate-pulse" /> Vista Previa en Vivo (1:1 Vista Estudiante)
                   </h4>
                   <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" /> Real-time
                   </span>
                 </div>
 
-                <div className="p-6 md:p-8 rounded-3xl bg-white border-2 border-slate-200 shadow-2xl space-y-4 text-slate-900 min-h-[500px] flex flex-col justify-between">
-                  <div className="space-y-4">
-                    <div className="border-b border-slate-200 pb-4">
-                      <div className="flex items-center justify-between gap-2 mb-2">
-                        <span className="text-xs font-extrabold uppercase tracking-widest text-cyan-700 bg-cyan-50 px-3 py-1 rounded-lg border border-cyan-200">
-                          Diseño: {editingSlide.layout}
+                <div className="p-6 md:p-8 rounded-3xl bg-white border-2 border-slate-200 shadow-2xl space-y-6 text-slate-900 min-h-[500px] flex flex-col justify-between overflow-x-auto">
+                  <div>
+                    {/* Header de la Diapositiva (Idéntico a PresentationView) */}
+                    <div className="mb-6 border-b border-slate-200 pb-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold uppercase tracking-widest text-cyan-700 flex items-center gap-1.5">
+                          <Sparkles size={14} /> Slide #{activeCourse?.slides.findIndex(s => s.id === editingSlide.id) !== undefined ? activeCourse.slides.findIndex(s => s.id === editingSlide.id) + 1 : 1} • {editingSlide.layout}
                         </span>
-                        <span className="text-xs text-slate-400 font-semibold">
-                          Slide #{activeCourse?.slides.findIndex(s => s.id === editingSlide.id) !== undefined ? activeCourse.slides.findIndex(s => s.id === editingSlide.id) + 1 : 1}
-                        </span>
+                        {editingSlide.questionId && (
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold border bg-cyan-50 border-cyan-300 text-cyan-800 font-bold flex items-center gap-1">
+                            <FileQuestion size={13} /> Ejercicio Interactivo Vinculado
+                          </span>
+                        )}
                       </div>
-                      <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 leading-tight">
+                      <h2 className={`text-2xl md:text-4xl font-extrabold tracking-tight text-slate-900 ${editingSlide.layout === 'title' ? 'text-center' : ''}`}>
                         {editingSlide.title || 'Sin Título'}
                       </h2>
                       {editingSlide.subtitle && (
-                        <p className="text-sm md:text-base font-semibold text-cyan-700 mt-1">
+                        <p className={`mt-2 text-base md:text-lg font-semibold text-cyan-700 ${editingSlide.layout === 'title' ? 'text-center' : ''}`}>
                           {editingSlide.subtitle}
                         </p>
                       )}
                     </div>
 
-                    <div className="text-slate-800 text-sm md:text-base leading-relaxed overflow-x-auto py-2">
-                      <MathText content={editingSlide.content || 'Sin contenido'} lightTheme={true} />
-                    </div>
-                  </div>
+                    {/* Contenido según el Layout Específico (Idéntico a PresentationView) */}
+                    {editingSlide.layout === 'title' && (
+                      <div className="py-6 text-center space-y-6 max-w-3xl mx-auto text-slate-800 text-base md:text-xl leading-relaxed">
+                        <MathText content={editingSlide.content || 'Sin contenido'} lightTheme={true} />
+                      </div>
+                    )}
 
-                  <div className="space-y-2 pt-4 border-t border-slate-100">
-                    {editingSlide.questionId && (
-                      <div className="p-3.5 rounded-2xl bg-cyan-50 border border-cyan-300 text-cyan-950 text-xs flex items-center justify-between">
-                        <span className="flex items-center gap-2 font-semibold line-clamp-1">
-                          <FileQuestion size={16} className="text-cyan-700 shrink-0" />
-                          Pregunta Vinculada: [{courseQuestions.find(q => q.id === editingSlide.questionId)?.type}] {courseQuestions.find(q => q.id === editingSlide.questionId)?.title}
-                        </span>
-                        <span className="text-emerald-800 font-bold shrink-0 bg-white px-2 py-0.5 rounded-md border border-emerald-300 text-[10px]">
-                          Activa en presentación
-                        </span>
+                    {editingSlide.layout === 'theorem' && (
+                      <div className="space-y-4">
+                        <div className="p-6 rounded-2xl border bg-cyan-50/90 border-cyan-200 text-slate-800 shadow-sm text-sm md:text-base leading-relaxed">
+                          <MathText content={editingSlide.content || 'Sin contenido'} lightTheme={true} />
+                        </div>
+                        {editingSlide.questionId && courseQuestions.find(q => q.id === editingSlide.questionId) && (
+                          <div className="mt-4">
+                            <QuestionRenderer
+                              question={courseQuestions.find(q => q.id === editingSlide.questionId)!}
+                              userState={undefined}
+                              onStateChange={() => {}}
+                              lightTheme={true}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {editingSlide.layout === 'split_question' && (
+                      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+                        <div className="space-y-4 text-slate-800 text-sm md:text-base leading-relaxed">
+                          <MathText content={editingSlide.content || 'Sin contenido'} lightTheme={true} />
+                        </div>
+                        <div>
+                          {editingSlide.questionId && courseQuestions.find(q => q.id === editingSlide.questionId) ? (
+                            <QuestionRenderer
+                              question={courseQuestions.find(q => q.id === editingSlide.questionId)!}
+                              userState={undefined}
+                              onStateChange={() => {}}
+                              lightTheme={true}
+                            />
+                          ) : (
+                            <div className="p-6 rounded-2xl border border-dashed text-center border-slate-300 text-slate-500 bg-slate-50 text-xs">
+                              Sin pregunta vinculada a esta diapositiva.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {editingSlide.layout === 'full_exercise' && (
+                      <div className="space-y-4">
+                        <div className="text-slate-800 text-sm md:text-base leading-relaxed">
+                          <MathText content={editingSlide.content || 'Sin contenido'} lightTheme={true} />
+                        </div>
+                        {editingSlide.questionId && courseQuestions.find(q => q.id === editingSlide.questionId) && (
+                          <QuestionRenderer
+                            question={courseQuestions.find(q => q.id === editingSlide.questionId)!}
+                            userState={undefined}
+                            onStateChange={() => {}}
+                            lightTheme={true}
+                          />
+                        )}
+                      </div>
+                    )}
+
+                    {editingSlide.layout === 'content' && (
+                      <div className="space-y-6 text-slate-800 text-sm md:text-base leading-relaxed">
+                        <MathText content={editingSlide.content || 'Sin contenido'} lightTheme={true} />
+                        {editingSlide.questionId && courseQuestions.find(q => q.id === editingSlide.questionId) && (
+                          <div className="mt-6">
+                            <QuestionRenderer
+                              question={courseQuestions.find(q => q.id === editingSlide.questionId)!}
+                              userState={undefined}
+                              onStateChange={() => {}}
+                              lightTheme={true}
+                            />
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
