@@ -5,17 +5,41 @@ import { Header } from './components/common/Header';
 import { PresentationView } from './components/presentation/PresentationView';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { StudentAuthModal } from './components/auth/StudentAuthModal';
+import { AdminAuthModal } from './components/auth/AdminAuthModal';
+import { LandingPage } from './components/home/LandingPage';
 
-const STORAGE_KEY_COURSES = 'exmath_courses_v2';
-const STORAGE_KEY_QUESTIONS = 'exmath_questions_v2';
-const STORAGE_KEY_RESPONSES = 'exmath_user_responses_v2';
+const STORAGE_KEY_COURSES = 'exmath_courses_v5';
+const STORAGE_KEY_QUESTIONS = 'exmath_questions_v5';
+const STORAGE_KEY_RESPONSES = 'exmath_user_responses_v5';
 const STORAGE_KEY_STUDENTS = 'exmath_students_v2';
 const STORAGE_KEY_CURRENT_STUDENT = 'exmath_current_student_v2';
+const STORAGE_KEY_ADMIN_PASSWORD = 'exmath_admin_password_v1';
+const SESSION_KEY_ADMIN_AUTH = 'exmath_admin_session_v1';
 
 export const App: React.FC = () => {
   const [role, setRole] = useState<Role>('presenter');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isAdminAuthModalOpen, setIsAdminAuthModalOpen] = useState(false);
+  const [isTeacherBypassed, setIsTeacherBypassed] = useState(false);
+
+  // Admin Master Password
+  const [adminPassword, setAdminPassword] = useState<string>(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY_ADMIN_PASSWORD) || 'admin123';
+    } catch {
+      return 'admin123';
+    }
+  });
+
+  // Admin Session Authenticated Flag
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem(SESSION_KEY_ADMIN_AUTH) === 'true';
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     const handleFsChange = () => {
@@ -29,7 +53,14 @@ export const App: React.FC = () => {
   const [courses, setCourses] = useState<Course[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_COURSES);
-      return saved ? JSON.parse(saved) : INITIAL_COURSES;
+      if (saved) {
+        const parsed: Course[] = JSON.parse(saved);
+        const algCourse = parsed.find((c) => c.code === 'MAT-301' || c.name.includes('Álgebra'));
+        if (algCourse && algCourse.slides && algCourse.slides.length >= 15) {
+          return parsed;
+        }
+      }
+      return INITIAL_COURSES;
     } catch {
       return INITIAL_COURSES;
     }
@@ -96,6 +127,10 @@ export const App: React.FC = () => {
   }, [students]);
 
   useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_ADMIN_PASSWORD, adminPassword);
+  }, [adminPassword]);
+
+  useEffect(() => {
     if (studentUser) {
       localStorage.setItem(STORAGE_KEY_CURRENT_STUDENT, JSON.stringify(studentUser));
     } else {
@@ -140,6 +175,7 @@ export const App: React.FC = () => {
 
   const handleLogoutStudent = () => {
     setStudentUser(null);
+    setIsTeacherBypassed(false);
   };
 
   const handleDeleteStudent = (id: string) => {
@@ -147,36 +183,82 @@ export const App: React.FC = () => {
       setStudents((prev) => prev.filter((s) => s.id !== id));
       if (studentUser?.id === id) {
         setStudentUser(null);
+        setIsTeacherBypassed(false);
       }
     }
   };
+
+  // ADMIN SECURITY HANDLERS
+  const handleRequestAdminAccess = () => {
+    if (isAdminAuthenticated) {
+      setRole('admin');
+    } else {
+      setIsAdminAuthModalOpen(true);
+    }
+  };
+
+  const handleAdminAuthSuccess = () => {
+    setIsAdminAuthenticated(true);
+    sessionStorage.setItem(SESSION_KEY_ADMIN_AUTH, 'true');
+    setRole('admin');
+    setIsAdminAuthModalOpen(false);
+  };
+
+  const handleLockAdmin = () => {
+    setIsAdminAuthenticated(false);
+    sessionStorage.removeItem(SESSION_KEY_ADMIN_AUTH);
+    setRole('presenter');
+  };
+
+  const handleChangeAdminPassword = (newPassword: string) => {
+    setAdminPassword(newPassword);
+    localStorage.setItem(STORAGE_KEY_ADMIN_PASSWORD, newPassword);
+  };
+
+  const handleRoleChange = (newRole: Role) => {
+    if (newRole === 'admin') {
+      handleRequestAdminAccess();
+    } else {
+      setRole(newRole);
+    }
+  };
+
+  const isAccessAllowed = (role === 'admin' && isAdminAuthenticated) || !!studentUser || isTeacherBypassed;
 
   return (
     <div className={`h-screen flex flex-col overflow-hidden font-sans ${
       role === 'admin' ? 'bg-slate-100 text-slate-900' : 'bg-slate-950 text-slate-100'
     }`}>
-      {/* Header General - Oculto en Pantalla Completa */}
-      {!isFullscreen && (
+      {/* Header General - Solo se muestra si el usuario ya ingresó y no está en Pantalla Completa */}
+      {!isFullscreen && isAccessAllowed && (
         <Header
           role={role}
-          onRoleChange={setRole}
+          onRoleChange={handleRoleChange}
           courses={courses}
           activeCourseId={activeCourseId}
           onSelectCourse={setActiveCourseId}
           studentUser={studentUser}
           onOpenAuthModal={() => setIsAuthModalOpen(true)}
           onLogoutStudent={handleLogoutStudent}
+          onRequestAdminAccess={handleRequestAdminAccess}
         />
       )}
 
       {/* Main View Area */}
       <main className="flex-1 overflow-hidden relative">
-        {role === 'presenter' ? (
+        {!isAccessAllowed ? (
+          <LandingPage
+            onOpenAuthModal={() => setIsAuthModalOpen(true)}
+            onAdminAccess={handleRequestAdminAccess}
+          />
+        ) : role === 'presenter' ? (
           <PresentationView
             course={activeCourse}
             questions={questions}
             userResponses={userResponses}
             onResponseChange={handleResponseChange}
+            role={role}
+            isStudent={!!studentUser && !isAdminAuthenticated}
           />
         ) : (
           <div className="h-full overflow-y-auto bg-slate-100">
@@ -190,19 +272,30 @@ export const App: React.FC = () => {
               onResetData={handleResetDemo}
               students={students}
               onDeleteStudent={handleDeleteStudent}
+              onLockAdmin={handleLockAdmin}
+              onChangeAdminPassword={handleChangeAdminPassword}
+              adminPassword={adminPassword}
             />
           </div>
         )}
       </main>
 
-      {/* Modal de Autenticación de Estudiantes con OTP de 5 Minutos */}
+      {/* Modal de Autenticación de Estudiantes (Login con Clave + Registro OTP) */}
       <StudentAuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         onLoginSuccess={handleLoginStudentSuccess}
+        students={students}
+      />
+
+      {/* Modal de Autenticación de Administrador / Docente con Clave Maestra */}
+      <AdminAuthModal
+        isOpen={isAdminAuthModalOpen}
+        onClose={() => setIsAdminAuthModalOpen(false)}
+        onSuccess={handleAdminAuthSuccess}
+        adminPasswordHash={adminPassword}
       />
     </div>
   );
 };
 export default App;
-

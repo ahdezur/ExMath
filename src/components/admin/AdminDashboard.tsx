@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Course, Slide, Question, SlideLayout, StudentUser, University } from '../../types';
 import { QuestionEditor } from './QuestionEditor';
 import { MathText } from '../../utils/katexRenderer';
@@ -11,6 +11,8 @@ import {
   Edit, 
   ArrowUp, 
   ArrowDown, 
+  ArrowLeft,
+  ArrowRight,
   Save, 
   Download, 
   Upload, 
@@ -22,7 +24,9 @@ import {
   Users,
   School,
   ShieldCheck,
-  Tag
+  Tag,
+  Lock,
+  KeyRound
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -35,6 +39,9 @@ interface AdminDashboardProps {
   onResetData: () => void;
   students: StudentUser[];
   onDeleteStudent: (id: string) => void;
+  onLockAdmin?: () => void;
+  onChangeAdminPassword?: (newPass: string) => void;
+  adminPassword?: string;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -47,22 +54,46 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onResetData,
   students,
   onDeleteStudent,
+  onLockAdmin,
+  onChangeAdminPassword,
+  adminPassword = 'admin123',
 }) => {
-  const [activeTab, setActiveTab] = useState<'courses' | 'slides' | 'questions' | 'students' | 'data'>('slides');
+  const [activeTab, setActiveTab] = useState<'courses' | 'slides' | 'questions' | 'students' | 'data' | 'security'>('slides');
   const [editingSlide, setEditingSlide] = useState<Slide | null>(null);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [isCreatingQuestion, setIsCreatingQuestion] = useState(false);
   const [questionFilterType, setQuestionFilterType] = useState<string>('all');
   const [studentUniFilter, setStudentUniFilter] = useState<string>('all');
+  const [newPassInput, setNewPassInput] = useState('');
+  const [confirmPassInput, setConfirmPassInput] = useState('');
+  const [passSuccessMsg, setPassSuccessMsg] = useState('');
+  const [passErrorMsg, setPassErrorMsg] = useState('');
+  const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
+  const [courseEditCode, setCourseEditCode] = useState('');
+  const [courseEditName, setCourseEditName] = useState('');
+  const [courseEditDescription, setCourseEditDescription] = useState('');
 
   const activeCourse = courses.find((c) => c.id === activeCourseId) || courses[0];
   const courseQuestions = questions.filter((q) => q.courseId === activeCourse?.id);
+
+  // Auto-seleccionar la primera diapositiva al entrar a la pestaña de slides si no hay ninguna seleccionada
+  useEffect(() => {
+    if (activeTab === 'slides' && (!editingSlide || !activeCourse?.slides.some((s) => s.id === editingSlide.id))) {
+      if (activeCourse?.slides && activeCourse.slides.length > 0) {
+        setEditingSlide(activeCourse.slides[0]);
+      } else {
+        setEditingSlide(null);
+      }
+    }
+  }, [activeTab, activeCourseId, activeCourse?.slides]);
 
   const getUniLabel = (uni: University) => {
     switch (uni) {
       case 'uchile': return 'U. de Chile (@ug.uchile.cl)';
       case 'uandes': return 'U. de los Andes (@miuandes.cl)';
       case 'udd': return 'U. del Desarrollo (@udd.cl)';
+      case 'usm': return 'UTFSM (@usm.cl)';
+      case 'puc': return 'PUC (@uc.cl)';
     }
   };
 
@@ -115,7 +146,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const updatedSlides = activeCourse.slides.map((s) => (s.id === slide.id ? slide : s));
     const updatedCourse = { ...activeCourse, slides: updatedSlides };
     onUpdateCourses(courses.map((c) => (c.id === activeCourse.id ? updatedCourse : c)));
-    setEditingSlide(null);
+    setEditingSlide(slide);
   };
 
   const handleAddSlide = () => {
@@ -212,7 +243,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-6 md:p-8 space-y-8 text-slate-900">
+    <div className="max-w-[1600px] w-full mx-auto p-4 md:p-8 space-y-8 text-slate-900">
       {/* HEADER DEL DASHBOARD DE ADMIN */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-6">
         <div>
@@ -224,20 +255,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </h1>
         </div>
 
-        {/* Course Selector for Active Editing */}
-        <div className="flex items-center gap-3 bg-white border border-slate-200 p-2 rounded-2xl shadow-sm">
-          <span className="text-xs font-semibold text-slate-600 pl-2">Curso Activo:</span>
-          <select
-            value={activeCourseId}
-            onChange={(e) => onSelectCourse(e.target.value)}
-            className="bg-slate-100 text-cyan-800 font-bold px-3 py-1.5 rounded-xl border border-slate-300 outline-none cursor-pointer"
-          >
-            {courses.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.code} - {c.name}
-              </option>
-            ))}
-          </select>
+        {/* Course Selector for Active Editing & Lock Button */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-3 bg-white border border-slate-200 p-2 rounded-2xl shadow-sm">
+            <span className="text-xs font-semibold text-slate-600 pl-2">Curso Activo:</span>
+            <select
+              value={activeCourseId}
+              onChange={(e) => onSelectCourse(e.target.value)}
+              className="bg-slate-100 text-cyan-800 font-bold px-3 py-1.5 rounded-xl border border-slate-300 outline-none cursor-pointer text-xs"
+            >
+              {courses.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.code} - {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {onLockAdmin && (
+            <button
+              onClick={onLockAdmin}
+              className="px-3.5 py-2.5 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-2xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+              title="Cerrar Sesión de Administrador"
+            >
+              <Lock size={15} /> Bloquear Admin
+            </button>
+          )}
         </div>
       </div>
 
@@ -288,6 +331,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </button>
 
         <button
+          onClick={() => setActiveTab('security')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all shrink-0 ${
+            activeTab === 'security'
+              ? 'bg-purple-600 text-white shadow-md'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+          }`}
+        >
+          <ShieldCheck size={18} /> Seguridad & Clave Admin
+        </button>
+
+        <button
           onClick={() => setActiveTab('data')}
           className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all shrink-0 ${
             activeTab === 'data'
@@ -295,107 +349,153 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
           }`}
         >
-          <Save size={18} /> Datos & Copia de Seguridad
+          <Save size={18} /> Datos & Backup
         </button>
       </div>
 
       {/* CONTENIDO PESTAÑA 1: DIAPOSITIVAS */}
       {activeTab === 'slides' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-              <Layers className="text-cyan-700" /> Diapositivas de "{activeCourse?.name}"
-            </h2>
+          {/* Header de Diapositivas */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <Layers className="text-cyan-700" /> Diapositivas de "{activeCourse?.name}"
+              </h2>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Total: <strong className="text-slate-800">{activeCourse?.slides.length || 0}</strong> diapositivas en este curso. Usa el selector horizontal para navegar entre ellas.
+              </p>
+            </div>
             <button
               onClick={handleAddSlide}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold bg-cyan-600 hover:bg-cyan-500 text-white shadow-lg transition-all"
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold bg-cyan-600 hover:bg-cyan-500 text-white shadow-md hover:shadow-lg transition-all text-sm shrink-0 cursor-pointer"
             >
               <Plus size={18} /> Agregar Diapositiva
             </button>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Lista de Slides */}
-            <div className="lg:col-span-1 space-y-3 max-h-[70vh] overflow-y-auto pr-2">
+          {/* BARRA HORIZONTAL DE NAVEGACIÓN Y SELECTOR DE DIAPOSITIVAS */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                Navegador de Diapositivas ({activeCourse?.slides.length})
+              </span>
+              <span className="text-[11px] text-slate-400 font-medium">
+                Desplaza horizontalmente para ver todas
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3 overflow-x-auto pb-3 pt-1 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent">
               {activeCourse?.slides.map((s, idx) => {
                 const isSelected = editingSlide?.id === s.id;
                 return (
                   <div
                     key={s.id}
-                    className={`p-4 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                    onClick={() => setEditingSlide(s)}
+                    className={`shrink-0 w-64 p-3.5 rounded-2xl border transition-all flex flex-col justify-between cursor-pointer ${
                       isSelected
-                        ? 'border-cyan-500 bg-cyan-50 ring-1 ring-cyan-500/50 shadow-sm'
-                        : 'border-slate-200 bg-white hover:border-slate-300 shadow-sm'
+                        ? 'border-cyan-500 bg-cyan-50/90 ring-2 ring-cyan-500/40 shadow-md scale-[1.01]'
+                        : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'
                     }`}
                   >
-                    <div
-                      onClick={() => setEditingSlide(s)}
-                      className="flex-1 cursor-pointer"
-                    >
-                      <span className="text-xs font-bold text-cyan-700 block mb-0.5">
-                        Slide {idx + 1} • {s.layout}
-                      </span>
-                      <h4 className="font-semibold text-slate-900 text-sm line-clamp-1">{s.title}</h4>
-                      {s.questionId && (
-                        <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block mt-1">
-                          ✓ Con Pregunta
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <span
+                          className={`text-[11px] font-extrabold px-2 py-0.5 rounded-full ${
+                            isSelected
+                              ? 'bg-cyan-600 text-white'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          Slide #{idx + 1}
                         </span>
-                      )}
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate max-w-[100px]">
+                          {s.layout}
+                        </span>
+                      </div>
+
+                      <h4 className="font-bold text-slate-900 text-xs line-clamp-1 mb-1">
+                        {s.title || 'Sin Título'}
+                      </h4>
                     </div>
 
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => setEditingSlide(s)}
-                        title="Ver / Editar Vista Previa"
-                        className={`p-1.5 rounded transition-colors ${
-                          isSelected ? 'bg-cyan-600 text-white' : 'hover:bg-slate-100 text-cyan-700'
-                        }`}
-                      >
-                        <Eye size={14} />
-                      </button>
-                      <button
-                        onClick={() => handleMoveSlide(idx, 'up')}
-                        disabled={idx === 0}
-                        className="p-1.5 rounded hover:bg-slate-100 text-slate-500 disabled:opacity-30"
-                      >
-                        <ArrowUp size={14} />
-                      </button>
-                      <button
-                        onClick={() => handleMoveSlide(idx, 'down')}
-                        disabled={idx === activeCourse.slides.length - 1}
-                        className="p-1.5 rounded hover:bg-slate-100 text-slate-500 disabled:opacity-30"
-                      >
-                        <ArrowDown size={14} />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteSlide(s.id)}
-                        className="p-1.5 rounded hover:bg-slate-100 text-rose-600"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                    <div className="flex items-center justify-between pt-2.5 mt-2 border-t border-slate-200/70 text-slate-500 text-xs">
+                      <div className="flex items-center gap-1">
+                        {s.questionId ? (
+                          <span
+                            className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200"
+                            title="Diapositiva con pregunta interactiva vinculada"
+                          >
+                            ✓ Pregunta
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 italic">Estándar</span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => handleMoveSlide(idx, 'up')}
+                          disabled={idx === 0}
+                          title="Mover hacia la izquierda"
+                          className="p-1 rounded hover:bg-slate-200 text-slate-600 disabled:opacity-25 transition-colors cursor-pointer"
+                        >
+                          <ArrowLeft size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleMoveSlide(idx, 'down')}
+                          disabled={idx === ((activeCourse?.slides.length || 1) - 1)}
+                          title="Mover hacia la derecha"
+                          className="p-1 rounded hover:bg-slate-200 text-slate-600 disabled:opacity-25 transition-colors cursor-pointer"
+                        >
+                          <ArrowRight size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSlide(s.id)}
+                          title="Eliminar esta diapositiva"
+                          className="p-1 rounded hover:bg-rose-100 text-rose-600 transition-colors cursor-pointer"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
               })}
+
+              <button
+                type="button"
+                onClick={handleAddSlide}
+                className="shrink-0 w-44 h-[94px] rounded-2xl border-2 border-dashed border-slate-300 hover:border-cyan-500 bg-slate-50 hover:bg-cyan-50/50 flex flex-col items-center justify-center gap-1 text-slate-500 hover:text-cyan-700 font-bold text-xs transition-all cursor-pointer"
+              >
+                <Plus size={20} />
+                <span>Nueva Diapositiva</span>
+              </button>
             </div>
+          </div>
 
-            {/* Editor de la Slide Seleccionada */}
-            <div className="lg:col-span-2">
-              {editingSlide ? (
-                <div className="bg-white border border-slate-200 rounded-3xl p-6 space-y-5 shadow-xl text-slate-900">
-                  <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-                    <h3 className="font-bold text-lg text-slate-900">
-                      Editando Diapositiva: {editingSlide.title}
-                    </h3>
-                    <button
-                      onClick={() => setEditingSlide(null)}
-                      className="text-xs font-bold text-slate-500 hover:text-slate-800"
-                    >
-                      Cerrar Editor
-                    </button>
-                  </div>
+          {/* WORKSPACE PARALELO (50% EDITOR / 50% VISTA PREVIA EN VIVO) */}
+          {editingSlide ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+              {/* COLUMNA IZQUIERDA (50% ANCHO): FORMULARIO DE EDICIÓN */}
+              <div className="bg-white border border-slate-200 rounded-3xl p-6 space-y-5 shadow-xl text-slate-900">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                  <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
+                    <Edit size={18} className="text-cyan-700" /> Editando: {editingSlide.title || 'Diapositiva sin título'}
+                  </h3>
+                  <button
+                    onClick={() => setEditingSlide(null)}
+                    className="text-xs font-bold text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl transition-all cursor-pointer"
+                  >
+                    Cerrar Editor
+                  </button>
+                </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-bold uppercase text-slate-600 mb-1">
                         Título Principal
@@ -406,7 +506,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         onChange={(e) =>
                           setEditingSlide({ ...editingSlide, title: e.target.value })
                         }
-                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-900 font-medium focus:border-cyan-600 focus:bg-white outline-none"
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-sm font-medium focus:border-cyan-600 focus:bg-white outline-none"
                       />
                     </div>
                     <div>
@@ -419,12 +519,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         onChange={(e) =>
                           setEditingSlide({ ...editingSlide, subtitle: e.target.value })
                         }
-                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-900 font-medium focus:border-cyan-600 focus:bg-white outline-none"
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-sm font-medium focus:border-cyan-600 focus:bg-white outline-none"
                       />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-bold uppercase text-slate-600 mb-1">
                         Diseño / Layout PPT
@@ -437,19 +537,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             layout: e.target.value as SlideLayout,
                           })
                         }
-                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-cyan-800 font-bold focus:border-cyan-600 focus:bg-white outline-none"
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-cyan-800 text-xs font-bold focus:border-cyan-600 focus:bg-white outline-none"
                       >
-                        <option value="title">Título de Portada</option>
+                        <option value="title">Portada</option>
                         <option value="content">Contenido Estándar</option>
-                        <option value="theorem">Caja Destacada de Teorema</option>
-                        <option value="split_question">Pantalla Dividida (Texto + Pregunta)</option>
-                        <option value="full_exercise">Ejercicio de Desarrollo Completo</option>
+                        <option value="theorem">Caja Teorema</option>
+                        <option value="split_question">Texto + Pregunta</option>
+                        <option value="full_exercise">Ejercicio Desarrollo</option>
                       </select>
                     </div>
 
                     <div>
                       <label className="block text-xs font-bold uppercase text-slate-600 mb-1">
-                        Pregunta Vinculada del Banco
+                        Pregunta Vinculada
                       </label>
                       <select
                         value={editingSlide.questionId || ''}
@@ -459,7 +559,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             questionId: e.target.value || undefined,
                           })
                         }
-                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-emerald-800 font-bold focus:border-cyan-600 focus:bg-white outline-none"
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-emerald-800 text-xs font-bold focus:border-cyan-600 focus:bg-white outline-none"
                       >
                         <option value="">-- Ninguna --</option>
                         {courseQuestions.map((q) => (
@@ -472,16 +572,110 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold uppercase text-slate-600 mb-1">
-                      Contenido (Markdown + LaTeX $...$ ó $$...$$)
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold uppercase text-slate-600">
+                        Contenido (HTML + LaTeX $...$ ó $$...$$)
+                      </label>
+                      <span className="text-[10px] font-bold text-cyan-700 uppercase tracking-wider">
+                        Soporte HTML + Animaciones
+                      </span>
+                    </div>
+
+                    {/* Quick Insert Snippet Toolbar */}
+                    <div className="flex flex-wrap gap-1.5 p-2 bg-slate-100 border border-slate-300 rounded-t-xl text-[11px] font-bold text-slate-700">
+                      <span className="text-[10px] uppercase text-slate-400 font-extrabold flex items-center pr-1">Insertar:</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const snippet = `\n<div class="p-4 bg-cyan-50 border-l-4 border-cyan-500 rounded-r-xl my-4">\n  <strong class="text-cyan-900 block mb-1">📌 Teorema / Definición:</strong>\n  Escriba aquí el teorema con $f(x) = ...$\n</div>\n`;
+                          setEditingSlide({ ...editingSlide, content: editingSlide.content + snippet });
+                        }}
+                        className="px-2 py-1 rounded bg-white hover:bg-cyan-50 text-cyan-800 border border-slate-300 transition-colors cursor-pointer"
+                        title="Insertar Caja de Teorema"
+                      >
+                        🎨 Caja Teorema
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const snippet = `\n<div class="p-4 bg-emerald-50 border-l-4 border-emerald-500 rounded-r-xl my-4">\n  <strong class="text-emerald-900 block mb-1">💡 Ejemplo Práctico:</strong>\n  Desarrollo del ejercicio con $x = ...$\n</div>\n`;
+                          setEditingSlide({ ...editingSlide, content: editingSlide.content + snippet });
+                        }}
+                        className="px-2 py-1 rounded bg-white hover:bg-emerald-50 text-emerald-800 border border-slate-300 transition-colors cursor-pointer"
+                        title="Insertar Caja de Ejemplo"
+                      >
+                        🟢 Ejemplo
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const snippet = `\n<div class="p-4 bg-amber-50 border-l-4 border-amber-500 rounded-r-xl my-4 text-amber-950">\n  <strong>⚠️ Nota / Advertencia:</strong> ¡Atención a las condiciones del problema!\n</div>\n`;
+                          setEditingSlide({ ...editingSlide, content: editingSlide.content + snippet });
+                        }}
+                        className="px-2 py-1 rounded bg-white hover:bg-amber-50 text-amber-900 border border-slate-300 transition-colors cursor-pointer"
+                        title="Insertar Caja de Alerta"
+                      >
+                        ⚠️ Alerta
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const snippet = `\n<div class="p-4 bg-slate-900 text-cyan-200 rounded-2xl border-2 border-cyan-400 animate-neon my-4 font-bold text-center shadow-lg">\n  ⚡ FÓRMULA DESTACADA: $$\\Delta = b^2 - 4ac$$\n</div>\n`;
+                          setEditingSlide({ ...editingSlide, content: editingSlide.content + snippet });
+                        }}
+                        className="px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-cyan-500 transition-colors cursor-pointer"
+                        title="Insertar Caja Neón Animada"
+                      >
+                        🌟 Neón Animado
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const snippet = `<span class="animate-highlight font-bold">Texto Destacado</span>`;
+                          setEditingSlide({ ...editingSlide, content: editingSlide.content + snippet });
+                        }}
+                        className="px-2 py-1 rounded bg-amber-200 hover:bg-amber-300 text-amber-950 border border-amber-400 transition-colors cursor-pointer"
+                        title="Insertar Marcador Subrayado"
+                      >
+                        🖊️ Marcador
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const snippet = `\n<div class="p-1 rounded-2xl bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-500 animate-rainbow my-4">\n  <div class="bg-white p-4 rounded-xl text-slate-900">\n    <h4 class="font-bold">Efecto Arcoíris Rotatorio</h4>\n    <p>Contenido con marco animado en vivo.</p>\n  </div>\n</div>\n`;
+                          setEditingSlide({ ...editingSlide, content: editingSlide.content + snippet });
+                        }}
+                        className="px-2 py-1 rounded bg-gradient-to-r from-cyan-500 to-indigo-500 text-white transition-colors cursor-pointer"
+                        title="Insertar Borde Arcoíris Animado"
+                      >
+                        🌈 Borde Arcoíris
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const snippet = `<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-cyan-100 text-cyan-900 border border-cyan-300">★ Etiqueta</span>`;
+                          setEditingSlide({ ...editingSlide, content: editingSlide.content + snippet });
+                        }}
+                        className="px-2 py-1 rounded bg-white hover:bg-slate-200 text-slate-800 border border-slate-300 transition-colors cursor-pointer"
+                        title="Insertar Badge o Chip"
+                      >
+                        🏷️ Badge
+                      </button>
+                    </div>
+
                     <textarea
-                      rows={5}
+                      rows={9}
                       value={editingSlide.content}
                       onChange={(e) =>
                         setEditingSlide({ ...editingSlide, content: e.target.value })
                       }
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 font-mono text-sm text-slate-900 focus:border-cyan-600 focus:bg-white outline-none"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-b-xl p-3.5 font-mono text-xs text-slate-900 focus:border-cyan-600 focus:bg-white outline-none leading-relaxed"
                     />
                   </div>
 
@@ -500,69 +694,79 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     />
                   </div>
 
-                  <div className="flex justify-end pt-2 border-b border-slate-200 pb-4">
+                  <div className="pt-2">
                     <button
                       onClick={() => handleSaveSlide(editingSlide)}
-                      className="px-6 py-2.5 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg transition-all flex items-center gap-2"
+                      className="w-full py-3 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg transition-all flex items-center justify-center gap-2 text-sm cursor-pointer"
                     >
                       <Save size={18} /> Guardar Cambios en Diapositiva
                     </button>
                   </div>
+                </div>
+              </div>
 
-                  {/* VISTA PREVIA EN VIVO DE LA DIAPOSITIVA (LIVE PREVIEW) */}
-                  <div className="pt-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-bold text-cyan-800 uppercase tracking-wider flex items-center gap-2">
-                        <Sparkles size={16} /> Vista Previa en Vivo de la Diapositiva
-                      </h4>
-                      <span className="text-xs text-slate-500 font-medium">
-                        Actualización en tiempo real
-                      </span>
+              {/* COLUMNA DERECHA (50% ANCHO): VISTA PREVIA EN VIVO (STICKY & ESPACIOSA) */}
+              <div className="space-y-3 sticky top-6">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                  <h4 className="text-xs font-bold text-cyan-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <Sparkles size={16} className="text-cyan-600 animate-pulse" /> Vista Previa en Vivo (Paralela 50/50)
+                  </h4>
+                  <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" /> Real-time
+                  </span>
+                </div>
+
+                <div className="p-6 md:p-8 rounded-3xl bg-white border-2 border-slate-200 shadow-2xl space-y-4 text-slate-900 min-h-[500px] flex flex-col justify-between">
+                  <div className="space-y-4">
+                    <div className="border-b border-slate-200 pb-4">
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <span className="text-xs font-extrabold uppercase tracking-widest text-cyan-700 bg-cyan-50 px-3 py-1 rounded-lg border border-cyan-200">
+                          Diseño: {editingSlide.layout}
+                        </span>
+                        <span className="text-xs text-slate-400 font-semibold">
+                          Slide #{activeCourse?.slides.findIndex(s => s.id === editingSlide.id) !== undefined ? activeCourse.slides.findIndex(s => s.id === editingSlide.id) + 1 : 1}
+                        </span>
+                      </div>
+                      <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 leading-tight">
+                        {editingSlide.title || 'Sin Título'}
+                      </h2>
+                      {editingSlide.subtitle && (
+                        <p className="text-sm md:text-base font-semibold text-cyan-700 mt-1">
+                          {editingSlide.subtitle}
+                        </p>
+                      )}
                     </div>
 
-                    <div className="p-6 rounded-2xl bg-slate-100 border border-slate-300 space-y-4">
-                      <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-lg space-y-4 text-slate-900">
-                        <div className="border-b border-slate-200 pb-4">
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-cyan-700 block mb-1">
-                            Diseño: {editingSlide.layout}
-                          </span>
-                          <h2 className="text-2xl font-extrabold text-slate-900">
-                            {editingSlide.title || 'Sin Título'}
-                          </h2>
-                          {editingSlide.subtitle && (
-                            <p className="text-sm font-semibold text-cyan-700 mt-1">
-                              {editingSlide.subtitle}
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="text-slate-800 text-base">
-                          <MathText content={editingSlide.content || 'Sin contenido'} lightTheme={true} />
-                        </div>
-
-                        {editingSlide.questionId && (
-                          <div className="mt-4 p-4 rounded-xl bg-cyan-50 border border-cyan-300 text-cyan-950 text-xs flex items-center justify-between">
-                            <span className="flex items-center gap-2 font-semibold">
-                              <FileQuestion size={16} className="text-cyan-700" />
-                              Pregunta Vinculada: [{courseQuestions.find(q => q.id === editingSlide.questionId)?.type}] {courseQuestions.find(q => q.id === editingSlide.questionId)?.title}
-                            </span>
-                            <span className="text-emerald-800 font-bold">Activa en Slide</span>
-                          </div>
-                        )}
-                      </div>
+                    <div className="text-slate-800 text-sm md:text-base leading-relaxed overflow-x-auto py-2">
+                      <MathText content={editingSlide.content || 'Sin contenido'} lightTheme={true} />
                     </div>
                   </div>
+
+                  <div className="space-y-2 pt-4 border-t border-slate-100">
+                    {editingSlide.questionId && (
+                      <div className="p-3.5 rounded-2xl bg-cyan-50 border border-cyan-300 text-cyan-950 text-xs flex items-center justify-between">
+                        <span className="flex items-center gap-2 font-semibold line-clamp-1">
+                          <FileQuestion size={16} className="text-cyan-700 shrink-0" />
+                          Pregunta Vinculada: [{courseQuestions.find(q => q.id === editingSlide.questionId)?.type}] {courseQuestions.find(q => q.id === editingSlide.questionId)?.title}
+                        </span>
+                        <span className="text-emerald-800 font-bold shrink-0 bg-white px-2 py-0.5 rounded-md border border-emerald-300 text-[10px]">
+                          Activa en presentación
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full p-12 border-2 border-dashed border-slate-300 rounded-3xl text-center text-slate-500 bg-white">
-                  <Layers size={40} className="mb-3 text-slate-400" />
-                  <p className="font-semibold text-slate-600">
-                    Selecciona una diapositiva de la izquierda para editar su contenido y ver su vista previa en vivo.
-                  </p>
-                </div>
-              )}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-16 border-2 border-dashed border-slate-300 rounded-3xl text-center text-slate-500 bg-white shadow-sm">
+              <Layers size={48} className="mb-3 text-slate-400" />
+              <h3 className="text-lg font-bold text-slate-700 mb-1">Ninguna Diapositiva Seleccionada</h3>
+              <p className="font-semibold text-slate-500 text-sm max-w-md">
+                Selecciona una diapositiva del navegador horizontal superior para desplegar el editor en paralelo y su vista previa en vivo.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -704,8 +908,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </span>
                   <div className="flex items-center gap-2">
                     <button
+                      onClick={() => {
+                        if (editingCourseId === c.id) {
+                          setEditingCourseId(null);
+                        } else {
+                          setEditingCourseId(c.id);
+                          setCourseEditCode(c.code);
+                          setCourseEditName(c.name);
+                          setCourseEditDescription(c.description);
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 transition-colors flex items-center gap-1 cursor-pointer"
+                      title="Editar nombre y datos del curso"
+                    >
+                      <Edit size={14} /> {editingCourseId === c.id ? 'Cancel' : 'Editar Nombre'}
+                    </button>
+
+                    <button
                       onClick={() => onSelectCourse(c.id)}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                         c.id === activeCourseId
                           ? 'bg-cyan-100 text-cyan-800 border border-cyan-300'
                           : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -716,7 +937,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     {courses.length > 1 && (
                       <button
                         onClick={() => handleDeleteCourse(c.id)}
-                        className="p-1.5 rounded hover:bg-slate-100 text-rose-600"
+                        className="p-1.5 rounded hover:bg-slate-100 text-rose-600 cursor-pointer"
+                        title="Eliminar curso"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -724,10 +946,84 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
                 </div>
 
-                <div>
-                  <h3 className="text-xl font-bold text-slate-900">{c.name}</h3>
-                  <p className="text-sm text-slate-600 mt-1">{c.description}</p>
-                </div>
+                {editingCourseId === c.id ? (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const updated = courses.map((item) =>
+                        item.id === c.id
+                          ? { ...item, code: courseEditCode.trim(), name: courseEditName.trim(), description: courseEditDescription.trim() }
+                          : item
+                      );
+                      onUpdateCourses(updated);
+                      setEditingCourseId(null);
+                    }}
+                    className="p-4 rounded-2xl bg-purple-50 border border-purple-200 space-y-3 animate-fadeIn"
+                  >
+                    <h4 className="text-xs font-extrabold uppercase text-purple-900 tracking-wider flex items-center gap-1.5">
+                      <Edit size={14} className="text-purple-700" /> Editar Datos del Curso
+                    </h4>
+
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">
+                        Código de Asignatura (Ej: MAT-301)
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={courseEditCode}
+                        onChange={(e) => setCourseEditCode(e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 outline-none focus:border-purple-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">
+                        Nombre Completo de la Asignatura
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={courseEditName}
+                        onChange={(e) => setCourseEditName(e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold text-slate-900 outline-none focus:border-purple-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">
+                        Descripción General del Curso
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={courseEditDescription}
+                        onChange={(e) => setCourseEditDescription(e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-900 outline-none focus:border-purple-600"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="submit"
+                        className="flex-1 py-2 px-4 rounded-xl font-bold bg-purple-600 hover:bg-purple-500 text-white text-xs shadow transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <Save size={14} /> Guardar Cambios
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingCourseId(null)}
+                        className="py-2 px-3 rounded-xl font-semibold bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 text-xs cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-900">{c.name}</h3>
+                    <p className="text-sm text-slate-600 mt-1">{c.description}</p>
+                  </div>
+                )}
 
                 {/* ETIQUETA DE ACCESO DE UNIVERSIDAD */}
                 <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
@@ -741,6 +1037,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   >
                     <option value="all">🌐 Todos los Estudiantes (Público General)</option>
                     <option value="uchile">🎓 Exclusivo U. de Chile (@ug.uchile.cl)</option>
+                    <option value="puc">🎓 Exclusivo PUC (@uc.cl)</option>
+                    <option value="usm">🎓 Exclusivo UTFSM (@usm.cl)</option>
                     <option value="uandes">🎓 Exclusivo U. de los Andes (@miuandes.cl)</option>
                     <option value="udd">🎓 Exclusivo U. del Desarrollo (@udd.cl)</option>
                   </select>
@@ -781,6 +1079,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               >
                 <option value="all">Todas ({students.length})</option>
                 <option value="uchile">U. de Chile ({students.filter(s => s.university === 'uchile').length})</option>
+                <option value="puc">PUC ({students.filter(s => s.university === 'puc').length})</option>
+                <option value="usm">UTFSM ({students.filter(s => s.university === 'usm').length})</option>
                 <option value="uandes">U. de los Andes ({students.filter(s => s.university === 'uandes').length})</option>
                 <option value="udd">U. del Desarrollo ({students.filter(s => s.university === 'udd').length})</option>
               </select>
@@ -792,7 +1092,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <School size={40} className="mx-auto text-slate-400" />
               <h3 className="font-bold text-slate-800 text-lg">No hay estudiantes registrados aún</h3>
               <p className="text-xs max-w-sm mx-auto">
-                Los alumnos deben ingresar desde el botón "Ingreso Estudiantes" en la barra superior con su correo @ug.uchile.cl, @miuandes.cl o @udd.cl.
+                Los alumnos deben ingresar desde el botón "Ingreso Estudiantes" en la barra superior con su correo @ug.uchile.cl, @uc.cl, @usm.cl, @miuandes.cl o @udd.cl.
               </p>
             </div>
           ) : (
@@ -855,6 +1155,98 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* CONTENIDO PESTAÑA SECURITY: SEGURIDAD & CLAVE ADMIN */}
+      {activeTab === 'security' && (
+        <div className="space-y-6 max-w-xl mx-auto">
+          <div className="bg-white border border-slate-200 rounded-3xl p-8 space-y-6 shadow-xl text-slate-900">
+            <div className="text-center space-y-2">
+              <div className="w-14 h-14 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center mx-auto shadow-inner">
+                <KeyRound size={28} />
+              </div>
+              <h2 className="text-2xl font-black text-slate-900">Seguridad & Clave Maestra</h2>
+              <p className="text-xs text-slate-600 font-medium">
+                Cambia la clave necesaria para acceder a este panel de administración de cursos y diapositivas.
+              </p>
+            </div>
+
+            {passSuccessMsg && (
+              <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
+                <CheckCircle2 size={16} className="text-emerald-600" />
+                <span>{passSuccessMsg}</span>
+              </div>
+            )}
+
+            {passErrorMsg && (
+              <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-2">
+                <ShieldCheck size={16} className="text-rose-600" />
+                <span>{passErrorMsg}</span>
+              </div>
+            )}
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                setPassSuccessMsg('');
+                setPassErrorMsg('');
+
+                if (newPassInput.length < 4) {
+                  setPassErrorMsg('La clave debe tener al menos 4 caracteres.');
+                  return;
+                }
+
+                if (newPassInput !== confirmPassInput) {
+                  setPassErrorMsg('Las contraseñas no coinciden. Verifica los campos.');
+                  return;
+                }
+
+                if (onChangeAdminPassword) {
+                  onChangeAdminPassword(newPassInput);
+                  setPassSuccessMsg('¡Clave Maestra actualizada exitosamente!');
+                  setNewPassInput('');
+                  setConfirmPassInput('');
+                }
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Nueva Clave Maestra
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={newPassInput}
+                  onChange={(e) => setNewPassInput(e.target.value)}
+                  placeholder="Escribe la nueva contraseña"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-900 font-mono font-bold focus:border-purple-600 focus:bg-white outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Confirmar Nueva Clave Maestra
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={confirmPassInput}
+                  onChange={(e) => setConfirmPassInput(e.target.value)}
+                  placeholder="Repite la nueva contraseña"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-900 font-mono font-bold focus:border-purple-600 focus:bg-white outline-none"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3.5 px-6 rounded-xl font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-lg transition-all text-sm flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Save size={18} /> Guardar Nueva Clave Maestra
+              </button>
+            </form>
+          </div>
         </div>
       )}
 

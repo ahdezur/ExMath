@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Course, Slide, Question, UserResponseState } from '../../types';
+import { Course, Slide, Question, UserResponseState, Role } from '../../types';
 import { MathText } from '../../utils/katexRenderer';
 import { QuestionRenderer } from '../questions/QuestionRenderer';
 import { 
@@ -23,6 +23,8 @@ interface PresentationViewProps {
   questions: Question[];
   userResponses: UserResponseState;
   onResponseChange: (questionId: string, stateUpdate: any) => void;
+  role?: Role;
+  isStudent?: boolean;
 }
 
 export const PresentationView: React.FC<PresentationViewProps> = ({
@@ -30,6 +32,8 @@ export const PresentationView: React.FC<PresentationViewProps> = ({
   questions,
   userResponses,
   onResponseChange,
+  role = 'presenter',
+  isStudent = false,
 }) => {
   const [currentSlideIdx, setCurrentSlideIdx] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -132,8 +136,8 @@ export const PresentationView: React.FC<PresentationViewProps> = ({
 
         {/* Action Controls */}
         <div className="flex items-center gap-2">
-          {/* Notes Toggle */}
-          {currentSlide.notes && (
+          {/* Notes Toggle (Solo visible para el Orador / Docente, NUNCA para Alumnos) */}
+          {!isStudent && role !== 'student' && currentSlide.notes && (
             <button
               onClick={() => setShowNotes(!showNotes)}
               className={`p-2 rounded-lg text-xs font-medium flex items-center gap-1.5 border transition-colors ${
@@ -141,9 +145,9 @@ export const PresentationView: React.FC<PresentationViewProps> = ({
                   ? 'bg-cyan-950 border-cyan-500 text-cyan-300' 
                   : lightTheme ? 'bg-slate-200 border-slate-300 text-slate-700' : 'bg-slate-800 border-slate-700 text-slate-300'
               }`}
-              title="Notas del Orador"
+              title="Notas Privadas del Orador (Docente)"
             >
-              <MessageSquare size={16} /> <span className="hidden md:inline">Notas</span>
+              <MessageSquare size={16} /> <span className="hidden md:inline">Notas Orador</span>
             </button>
           )}
 
@@ -310,13 +314,13 @@ export const PresentationView: React.FC<PresentationViewProps> = ({
         </div>
       </div>
 
-      {/* SPEAKER NOTES DRAWER (NOTAS DEL ORADOR) */}
-      {showNotes && currentSlide.notes && (
-        <div className="px-6 py-4 bg-cyan-950/90 border-t border-cyan-500/40 text-cyan-100 flex items-start gap-3 text-sm z-20 backdrop-blur-md">
+      {/* SPEAKER NOTES DRAWER (NOTAS PRIVADAS DEL ORADOR) */}
+      {!isStudent && role !== 'student' && showNotes && currentSlide.notes && (
+        <div className="px-6 py-4 bg-slate-900 border-t border-cyan-500/40 text-cyan-100 flex items-start gap-3 text-sm z-20 backdrop-blur-md shadow-2xl">
           <MessageSquare className="text-cyan-400 shrink-0 mt-0.5" size={18} />
           <div>
-            <span className="font-bold text-cyan-300 block mb-0.5">Notas del Orador:</span>
-            <p>{currentSlide.notes}</p>
+            <span className="font-bold text-cyan-300 block mb-0.5">💬 Notas Privadas del Orador (Solo visibles para el Docente):</span>
+            <p className="leading-relaxed text-xs md:text-sm">{currentSlide.notes}</p>
           </div>
         </div>
       )}

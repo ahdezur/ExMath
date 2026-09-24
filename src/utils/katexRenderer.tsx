@@ -25,84 +25,61 @@ export const renderKatexString = (tex: string, displayMode: boolean = false): st
 };
 
 /**
- * Component that parses a text block containing mixed text and LaTeX:
- * - $$ ... $$ for block/display math
- * - $ ... $ for inline math
+ * Procesador Híbrido: Permite mezclar Código HTML, Animaciones CSS, Clases Tailwind,
+ * formato Markdown y Ecuaciones LaTeX ($ ... $ y $$ ... $$).
  */
-export const MathText: React.FC<MathRendererProps> = ({ content, className = '', lightTheme = false }) => {
+export const processHybridMathHTML = (rawContent: string, lightTheme: boolean = true): string => {
+  if (!rawContent) return '';
+
+  let processed = rawContent;
+
+  // 1. Reemplazar Ecuaciones de Bloque $$ ... $$ por KaTeX HTML
+  processed = processed.replace(/\$\$([\s\S]+?)\$\$/g, (_, tex) => {
+    const katexHtml = renderKatexString(tex.trim(), true);
+    const themeClass = lightTheme
+      ? 'bg-cyan-50/90 border-cyan-300 text-cyan-950 font-medium'
+      : 'bg-slate-800/60 border-slate-700/60 text-cyan-200 shadow-inner';
+    return `<div class="my-4 overflow-x-auto py-3 px-4 rounded-xl border text-center font-serif text-lg shadow-sm ${themeClass}">${katexHtml}</div>`;
+  });
+
+  // 2. Reemplazar Ecuaciones en Línea $ ... $ por KaTeX HTML
+  processed = processed.replace(/\$([^\$]+?)\$/g, (_, tex) => {
+    const katexHtml = renderKatexString(tex.trim(), false);
+    const themeClass = lightTheme ? 'text-cyan-800 font-bold' : 'text-cyan-300 font-semibold';
+    return `<span class="inline-block px-1 font-serif ${themeClass}">${katexHtml}</span>`;
+  });
+
+  // 3. Procesar sintaxis de Markdown común si existe
+  // Citas / Blockquotes
+  processed = processed.replace(/^>\s*(.+)$/gm, (_, body) => {
+    return `<blockquote class="p-3 my-2 border-l-4 border-cyan-500 bg-cyan-50/70 text-slate-800 rounded-r-lg font-medium">${body}</blockquote>`;
+  });
+
+  // Encabezados Markdown ###, ##
+  processed = processed.replace(/^###\s*(.+)$/gm, '<h3 class="text-xl font-bold text-cyan-900 my-2">$1</h3>');
+  processed = processed.replace(/^##\s*(.+)$/gm, '<h2 class="text-2xl font-extrabold text-slate-900 my-3">$1</h2>');
+
+  // Negritas **texto**
+  processed = processed.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+  // Cursiva *texto*
+  processed = processed.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+  return processed;
+};
+
+/**
+ * Componente principal que renderiza el contenido Híbrido en las diapositivas
+ */
+export const MathText: React.FC<MathRendererProps> = ({ content, className = '', lightTheme = true }) => {
   if (!content) return null;
 
-  // Split by $$ first for block math, then by $ for inline math
-  const parseContent = (text: string) => {
-    const parts: React.ReactNode[] = [];
-    const blockRegex = /\$\$([\s\S]+?)\$\$/g;
-    
-    let lastIndex = 0;
-    let match: RegExpExecArray | null;
+  const html = processHybridMathHTML(content, lightTheme);
 
-    const textSegments: { text: string; isBlock: boolean }[] = [];
-
-    while ((match = blockRegex.exec(text)) !== null) {
-      if (match.index > lastIndex) {
-        textSegments.push({ text: text.substring(lastIndex, match.index), isBlock: false });
-      }
-      textSegments.push({ text: match[1], isBlock: true });
-      lastIndex = blockRegex.lastIndex;
-    }
-
-    if (lastIndex < text.length) {
-      textSegments.push({ text: text.substring(lastIndex), isBlock: false });
-    }
-
-    textSegments.forEach((segment, segIdx) => {
-      if (segment.isBlock) {
-        const html = renderKatexString(segment.text.trim(), true);
-        parts.push(
-          <div 
-            key={`block-${segIdx}`}
-            className={`my-4 overflow-x-auto py-3 px-4 rounded-xl border text-center font-serif text-lg shadow-sm ${
-              lightTheme 
-                ? 'bg-cyan-50/90 border-cyan-300 text-cyan-950 font-medium' 
-                : 'bg-slate-800/60 border-slate-700/60 text-cyan-200 shadow-inner'
-            }`}
-            dangerouslySetInnerHTML={{ __html: html }} 
-          />
-        );
-      } else {
-        const inlineRegex = /\$([^\$]+?)\$/g;
-        let inlineLastIndex = 0;
-        let inlineMatch: RegExpExecArray | null;
-
-        while ((inlineMatch = inlineRegex.exec(segment.text)) !== null) {
-          if (inlineMatch.index > inlineLastIndex) {
-            const rawText = segment.text.substring(inlineLastIndex, inlineMatch.index);
-            parts.push(<span key={`text-${segIdx}-${inlineLastIndex}`}>{rawText}</span>);
-          }
-          const html = renderKatexString(inlineMatch[1].trim(), false);
-          parts.push(
-            <span 
-              key={`inline-${segIdx}-${inlineMatch.index}`}
-              className={`inline-block px-1 font-serif ${
-                lightTheme ? 'text-cyan-800 font-bold' : 'text-cyan-300 font-semibold'
-              }`}
-              dangerouslySetInnerHTML={{ __html: html }} 
-            />
-          );
-          inlineLastIndex = inlineRegex.lastIndex;
-        }
-
-        if (inlineLastIndex < segment.text.length) {
-          parts.push(
-            <span key={`text-end-${segIdx}`}>
-              {segment.text.substring(inlineLastIndex)}
-            </span>
-          );
-        }
-      }
-    });
-
-    return parts;
-  };
-
-  return <div className={`prose-math leading-relaxed ${className}`}>{parseContent(content)}</div>;
+  return (
+    <div
+      className={`prose-math leading-relaxed ${className}`}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
 };

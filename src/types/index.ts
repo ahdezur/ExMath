@@ -1,12 +1,13 @@
 export type Role = 'admin' | 'presenter' | 'student';
 
-export type University = 'uchile' | 'uandes' | 'udd';
+export type University = 'uchile' | 'uandes' | 'udd' | 'usm' | 'puc';
 
 export interface StudentUser {
   id: string;
   email: string;
   name: string;
   university: University;
+  password?: string;
   verified: boolean;
   createdAt: string;
 }
@@ -17,6 +18,7 @@ export interface OTPState {
   expiresAt: number; // timestamp in ms
   university: University;
   name: string;
+  password?: string;
 }
 
 export type QuestionType = 

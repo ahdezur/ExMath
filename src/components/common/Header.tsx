@@ -11,6 +11,7 @@ interface HeaderProps {
   studentUser: StudentUser | null;
   onOpenAuthModal: () => void;
   onLogoutStudent: () => void;
+  onRequestAdminAccess: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -22,12 +23,15 @@ export const Header: React.FC<HeaderProps> = ({
   studentUser,
   onOpenAuthModal,
   onLogoutStudent,
+  onRequestAdminAccess,
 }) => {
   const getUniLabel = (uni: University) => {
     switch (uni) {
       case 'uchile': return 'U. de Chile';
       case 'uandes': return 'U. de los Andes';
       case 'udd': return 'U. del Desarrollo';
+      case 'usm': return 'USM';
+      case 'puc': return 'PUC';
     }
   };
 
@@ -36,6 +40,8 @@ export const Header: React.FC<HeaderProps> = ({
       case 'uchile': return 'bg-blue-950 text-blue-300 border-blue-700';
       case 'uandes': return 'bg-teal-950 text-teal-300 border-teal-700';
       case 'udd': return 'bg-purple-950 text-purple-300 border-purple-700';
+      case 'usm': return 'bg-amber-950 text-amber-300 border-amber-700';
+      case 'puc': return 'bg-rose-950 text-rose-300 border-rose-700';
     }
   };
 
@@ -125,7 +131,13 @@ export const Header: React.FC<HeaderProps> = ({
             <Play size={13} /> Presentación
           </button>
           <button
-            onClick={() => onRoleChange('admin')}
+            onClick={() => {
+              if (role === 'admin') {
+                onRoleChange('admin');
+              } else {
+                onRequestAdminAccess();
+              }
+            }}
             className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
               role === 'admin'
                 ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md'
